@@ -13,4 +13,4 @@ COPY --from=build /build/main /app/main
 
 USER 1001
 
-ENTRYPOINT ["/app/main"]
+CMD ["/app/main"]
