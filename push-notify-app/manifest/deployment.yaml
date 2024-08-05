@@ -15,7 +15,7 @@ spec:
         app: image-updater
     spec:
       containers:
-      - image: murasame29/image-updater:0.0.4
+      - image: murasame29/image-updater:0.0.5
         name: image-updater
         resources:
           requests:
