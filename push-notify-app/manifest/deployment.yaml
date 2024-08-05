@@ -15,8 +15,8 @@ spec:
         app: image-updater
     spec:
       containers:
-      - image: nginx
-        name: nginx
+      - image: murasame29/image-updater:0.0.0
+        name: image-updater
         resources:
           requests:
             cpu: 100m
