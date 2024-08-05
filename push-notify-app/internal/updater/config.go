@@ -51,7 +51,19 @@ func (c *RegistryConfig) buildRepositoryName(event *model.ECRPushEvent) (string,
 		return "", fmt.Errorf("environment not match")
 	}
 
+	variableMap := make(map[string]string)
+
 	// $1 ,$2 ..に対応対応するピースを探す
+	registryName := strings.Split(c.RegitryURI, "/")
+	splitedRegistryName := strings.Split(event.Detail.RepositoryName, "/")
+	for i := range splitedRegistryName {
+		if strings.Contains(registryName[i], "*") {
+			continue
+		}
+		if strings.Contains(registryName[i], "$") {
+			variableMap[registryName[i]] = splitedRegistryName[i]
+		}
+	}
 
 	repositoryName := c.GitHubRepository
 	splitedRepository := strings.Split(c.GitHubRepository, "/")
@@ -63,6 +75,9 @@ func (c *RegistryConfig) buildRepositoryName(event *model.ECRPushEvent) (string,
 			}
 
 			// $1 ,$2 ..に対応対応するピースを埋める
+			for variable, value := range variableMap {
+				repositoryName = strings.ReplaceAll(repositoryName, variable, value)
+			}
 		}
 	}
 

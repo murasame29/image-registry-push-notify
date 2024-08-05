@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: tester
+  name: tester
+spec:
+  containers:
+  - image: busybox:1.36
+    name: tester
+    command: ["sleep", "360000"]
+    securityContext:
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 3000
+      allowPrivilegeEscalation: false
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always

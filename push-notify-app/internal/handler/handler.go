@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -41,7 +42,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	log.Debug(ctx, "parse config successfly")
 	log.Debug(ctx, "trying update")
 
-	if err := updater.Update(&updater.AppConfig{
+	if err := updater.Update(ctx, &updater.AppConfig{
 		LogLevel:                config.Config.App.LogLevel,
 		GitHubApplicationID:     config.Config.GitHub.ApplicationID,
 		GitHubAppInstallationID: config.Config.GitHub.InstallationID,
@@ -53,4 +54,6 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Debug(ctx, "update successfly")
+
+	fmt.Fprintf(w, "successfly")
 }

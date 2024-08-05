@@ -2,9 +2,11 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/v63/github"
@@ -35,6 +37,18 @@ func NewGitHub(applicationID, installID int64, username, crtPath string) (*GitHu
 
 		clinet: client,
 	}, nil
+}
+
+func (g *GitHub) Branch(ctx context.Context, repo *git.Repository, branch string) error {
+	headRef, err := repo.Head()
+	if err != nil {
+		log.Error(ctx, "failed to get headref. error: %v", err)
+		return err
+	}
+
+	ref := plumbing.NewHashReference(plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)), headRef.Hash())
+
+	return repo.Storer.SetReference(ref)
 }
 
 func (g *GitHub) Clone(ctx context.Context, repository string) (*git.Repository, error) {
