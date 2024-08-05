@@ -6,7 +6,7 @@ COPY . .
 RUN go mod download \
 && go build -o main cmd/main.go
 
-FROM public.ecr.aws/lambda/provided:al2023
+FROM gcr.io/distroless/static-debian11:nonroot
 WORKDIR /app
 
 COPY --from=build /build/main /app/main
