@@ -42,7 +42,7 @@ spec:
           mountPath: /etc/crt
         - name: config
           mountPath: /etc/config
-        readinessProbe:
+        livenessProbe:
           httpGet:
             path: /healthz
             port: 8080
