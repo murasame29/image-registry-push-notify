@@ -42,6 +42,12 @@ spec:
           mountPath: /etc/crt
         - name: config
           mountPath: /etc/config
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 5
       volumes:
       - name: github-app-crt
         secret:
