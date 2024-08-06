@@ -41,12 +41,14 @@ func Update(ctx context.Context, config *AppConfig, event *model.ECRPushEvent) e
 	}
 
 	repoURI := strings.Split(regitryConfig.GitHubRepository, "/")
-	repo, err := git.Clone(ctx, fmt.Sprintf("https://%s", strings.Join(repoURI[:2], "/")))
+	repo, filePath, err := git.Clone(ctx, fmt.Sprintf("https://%s", strings.Join(repoURI[:3], "/")))
 	if err != nil {
 		return fmt.Errorf("failed to clone repository. error: %v", err)
 	}
 
-	targetDir := filepath.Join("/tmp", repoURI[2], repositoryDir, "kustomization.yaml")
+	defer os.RemoveAll(filePath) // error: no check
+
+	targetDir := filepath.Join(filePath, strings.Join(strings.Split(repositoryDir, "/")[3:], "/"), "kustomization.yaml")
 
 	kustomizationFile, err := os.Open(targetDir)
 	if err != nil {
@@ -91,13 +93,12 @@ func Update(ctx context.Context, config *AppConfig, event *model.ECRPushEvent) e
 	}
 
 	if err := git.Branch(ctx, repo, fmt.Sprintf("test_%d", time.Now().Unix())); err != nil {
-		return fmt.Errorf("faield to switch branch")
+		return fmt.Errorf("faield to switch branch. error: %v", err)
 	}
 
 	if _, err := git.Commit(ctx, repo, targetDir, "fix: kustomization new tag"); err != nil {
 		return fmt.Errorf("failed to commit. error: %v", err)
 	}
-
 	return git.Push(ctx, repo)
 }
 

@@ -21,11 +21,13 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Error(ctx, "failed to read body. error: %v", err)
+		w.WriteHeader(400)
 		return
 	}
 
 	if err := json.Unmarshal(body, &eventBody); err != nil {
 		log.Error(ctx, "failed to uunmarshal. error: %v", err)
+		w.WriteHeader(400)
 		return
 	}
 
@@ -33,9 +35,10 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	log.Info(ctx, "event recieved! event-type: %s", eventBody.DetailType)
 
 	log.Debug(ctx, "trying parse config...")
-	registryConfigs, err := updater.ParseConfig(config.Config.App.ConfigPath)
+	registryConfigs, err := updater.NewConfigWithFile(config.Config.App.ConfigPath)
 	if err != nil {
 		log.Error(ctx, "failed to parse config. error: %v", err)
+		w.WriteHeader(500)
 		return
 	}
 
@@ -51,9 +54,12 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		RegistryConfig:          registryConfigs,
 	}, &eventBody); err != nil {
 		log.Error(ctx, "failed to updater. error: %v", err)
+		w.WriteHeader(500)
+		return
 	}
 
 	log.Debug(ctx, "update successfly")
 
+	w.WriteHeader(200)
 	fmt.Fprintf(w, "successfly")
 }

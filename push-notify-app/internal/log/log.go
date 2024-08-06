@@ -52,35 +52,35 @@ func (l *Logger) trace(format string, args ...any) {
 	if l.logLevel > LevelTrace {
 		return
 	}
-	fmt.Fprintf(l.out, "[TRACE] %s %s", l.times(), fmt.Sprintf(format, args...))
+	fmt.Fprintf(l.out, "[TRACE] %s %s\n", l.times(), fmt.Sprintf(format, args...))
 }
 
 func (l *Logger) debug(format string, args ...any) {
 	if l.logLevel > LevelDebug {
 		return
 	}
-	fmt.Fprintf(l.out, "[TRACE] %s %s", l.times(), fmt.Sprintf(format, args...))
+	fmt.Fprintf(l.out, "[DEBUG] %s %s\n", l.times(), fmt.Sprintf(format, args...))
 }
 
 func (l *Logger) info(format string, args ...any) {
 	if l.logLevel > LevelInfo {
 		return
 	}
-	fmt.Fprintf(l.out, "[TRACE] %s %s", l.times(), fmt.Sprintf(format, args...))
+	fmt.Fprintf(l.out, "[INFO] %s %s\n", l.times(), fmt.Sprintf(format, args...))
 }
 
 func (l *Logger) warn(format string, args ...any) {
 	if l.logLevel > LevelWarn {
 		return
 	}
-	fmt.Fprintf(l.out, "[TRACE] %s %s", l.times(), fmt.Sprintf(format, args...))
+	fmt.Fprintf(l.out, "[WARN] %s %s\n", l.times(), fmt.Sprintf(format, args...))
 }
 
 func (l *Logger) error(format string, args ...any) {
 	if l.logLevel > LevelError {
 		return
 	}
-	fmt.Fprintf(l.out, "[TRACE] %s %s", l.times(), fmt.Sprintf(format, args...))
+	fmt.Fprintf(l.out, "[ERROR] %s %s\n", l.times(), fmt.Sprintf(format, args...))
 }
 
 func (l *Logger) times() string {

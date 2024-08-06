@@ -3,9 +3,11 @@ package git
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -40,19 +42,59 @@ func NewGitHub(applicationID, installID int64, username, crtPath string) (*GitHu
 }
 
 func (g *GitHub) Branch(ctx context.Context, repo *git.Repository, branch string) error {
-	headRef, err := repo.Head()
+	workspace, err := repo.Worktree()
 	if err != nil {
-		log.Error(ctx, "failed to get headref. error: %v", err)
+		log.Error(ctx, "failed to open worktree. error: %v", err)
 		return err
 	}
 
-	ref := plumbing.NewHashReference(plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)), headRef.Hash())
+	checkoutOption := &git.CheckoutOptions{
+		Branch: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branch)),
+		Create: true,
+	}
+	if err := workspace.Checkout(checkoutOption); err != nil {
+		log.Error(ctx, "failed to check out. error: %v", err)
+		mirrorRemoteBranchRefSpec := fmt.Sprintf("refs/heads/%s:refs/heads/%s", branch, branch)
+		if err := fetchOrigin(ctx, repo, mirrorRemoteBranchRefSpec); err != nil {
+			return fmt.Errorf("faield to fetch origin. error:%v", err)
+		}
 
-	return repo.Storer.SetReference(ref)
+		if err := workspace.Checkout(checkoutOption); err != nil {
+			return fmt.Errorf("faield to checkout branch. error:%v", err)
+		}
+	}
+
+	return nil
+}
+func fetchOrigin(ctx context.Context, repo *git.Repository, refSpecStr string) error {
+	remote, err := repo.Remote("origin")
+	if err != nil {
+		log.Error(ctx, "failed to open worktree. error: %v", err)
+		return err
+	}
+
+	var refSpecs []config.RefSpec
+	if refSpecStr != "" {
+		refSpecs = []config.RefSpec{config.RefSpec(refSpecStr)}
+	}
+
+	if err = remote.Fetch(&git.FetchOptions{
+		RefSpecs: refSpecs,
+	}); err != nil {
+		if err == git.NoErrAlreadyUpToDate {
+			fmt.Print("refs already up to date")
+		} else {
+			return fmt.Errorf("fetch origin failed: %v", err)
+		}
+	}
+
+	return nil
 }
 
-func (g *GitHub) Clone(ctx context.Context, repository string) (*git.Repository, error) {
-	repo, err := git.PlainClone("/tmp", false, &git.CloneOptions{
+func (g *GitHub) Clone(ctx context.Context, repository string) (*git.Repository, string, error) {
+	repoName := strings.Split(repository, "/")[4]
+	dir := fmt.Sprintf("./tmp/%s_%d", repoName, time.Now().Unix())
+	repo, err := git.PlainClone(dir, false, &git.CloneOptions{
 		URL: repository,
 		Auth: &http.BasicAuth{
 			Username: g.username,
@@ -61,10 +103,10 @@ func (g *GitHub) Clone(ctx context.Context, repository string) (*git.Repository,
 	})
 	if err != nil {
 		log.Error(ctx, "failed to clone repository. repository: %s error: %v", repository, err)
-		return nil, err
+		return nil, "", err
 	}
 
-	return repo, nil
+	return repo, dir, nil
 }
 
 func (g *GitHub) Commit(ctx context.Context, repo *git.Repository, path string, message string) (string, error) {
@@ -75,7 +117,7 @@ func (g *GitHub) Commit(ctx context.Context, repo *git.Repository, path string, 
 	}
 
 	log.Info(ctx, "trying git add. path: %s", path)
-	hash, err := workspace.Add(path)
+	hash, err := workspace.Add(".")
 	if err != nil {
 		log.Error(ctx, "failed to git add. path: %s error: %v", path, err)
 		return "", err
