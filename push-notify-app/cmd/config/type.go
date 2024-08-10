@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 var Config config
 
 type config struct {
@@ -11,7 +13,13 @@ type config struct {
 	}
 
 	App struct {
-		LogLevel   string `env:"LOG_LEVEL"`
-		ConfigPath string `env:"CONFIG_PATH"`
+		LogLevel   string        `env:"LOG_LEVEL"`
+		ConfigPath string        `env:"CONFIG_PATH"`
+		Interval   time.Duration `env:"INTERVAL" envDefault:"10s"`
+	}
+
+	AWS struct {
+		RoleARN  string `env:"AWS_ROLE_ARN"`
+		QueueURI string `env:"AWS_QUEUE_URI"`
 	}
 }

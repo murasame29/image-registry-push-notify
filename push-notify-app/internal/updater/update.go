@@ -2,22 +2,31 @@ package updater
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"gopkg.in/yaml.v3"
-	"sigs.k8s.io/kustomize/api/types"
 
 	"github.com/murasame29/image-registry-push-notify/sample-app/internal/git"
+	"github.com/murasame29/image-registry-push-notify/sample-app/internal/log"
 	"github.com/murasame29/image-registry-push-notify/sample-app/internal/model"
+	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/kustomize/api/types"
+)
+
+var (
+	ErrImageTagNotAllowed = errors.New("image tag not allowed")
+	ErrImageTagDeny       = errors.New("image tag deny")
+	ErrDuplicatePR        = errors.New("duplicate pr")
 )
 
 func Update(ctx context.Context, config *AppConfig, event *model.ECRPushEvent) error {
-	git, err := git.NewGitHub(config.GitHubApplicationID, config.GitHubAppInstallationID, config.GitHubUsername, config.GitHubAppCrtPath)
+	return update(ctx, config, event)
+}
+func update(ctx context.Context, config *AppConfig, event *model.ECRPushEvent) error {
+	github, err := git.NewGitHub(config.GitHubApplicationID, config.GitHubAppInstallationID, config.GitHubUsername, config.GitHubAppCrtPath)
 	if err != nil {
 		return fmt.Errorf("failed to new github. error: %v", err)
 	}
@@ -28,11 +37,13 @@ func Update(ctx context.Context, config *AppConfig, event *model.ECRPushEvent) e
 	}
 
 	if !regitryConfig.checkAllowTag(event.Detail.ImageTag) {
-		return fmt.Errorf("tag not allowed. tag: %s", event.Detail.ImageTag)
+		log.Warn(ctx, "image tag not allowed. event: %v", event)
+		return ErrImageTagNotAllowed
 	}
 
 	if !regitryConfig.checkDenyTag(event.Detail.ImageTag) {
-		return fmt.Errorf("tag is deny. tag: %s", event.Detail.ImageTag)
+		log.Warn(ctx, "image tag deny. event: %v", event)
+		return ErrImageTagDeny
 	}
 
 	repositoryDir, err := regitryConfig.buildRepositoryName(event)
@@ -41,14 +52,14 @@ func Update(ctx context.Context, config *AppConfig, event *model.ECRPushEvent) e
 	}
 
 	repoURI := strings.Split(regitryConfig.GitHubRepository, "/")
-	repo, filePath, err := git.Clone(ctx, fmt.Sprintf("https://%s", strings.Join(repoURI[:3], "/")))
+	repo, filePath, err := github.Clone(ctx, strings.Join(repoURI[:5], "/"))
 	if err != nil {
 		return fmt.Errorf("failed to clone repository. error: %v", err)
 	}
 
 	defer os.RemoveAll(filePath) // error: no check
 
-	targetDir := filepath.Join(filePath, strings.Join(strings.Split(repositoryDir, "/")[3:], "/"), "kustomization.yaml")
+	targetDir := filepath.Join(filePath, strings.Join(strings.Split(repositoryDir, "/")[5:], "/"), "kustomization.yaml")
 
 	kustomizationFile, err := os.Open(targetDir)
 	if err != nil {
@@ -88,18 +99,28 @@ func Update(ctx context.Context, config *AppConfig, event *model.ECRPushEvent) e
 		return fmt.Errorf("failed to get stat. error: %v", err)
 	}
 
+	if err := github.Branch(ctx, repo, fmt.Sprintf("image_updater_%s_%s_%s", strings.Join(strings.Split(event.Detail.RepositoryName, "/")[1:], "_"), regitryConfig.Env[event.Account], event.Detail.ImageTag)); err != nil {
+		return fmt.Errorf("faield to switch branch. error: %v", err)
+	}
+
 	if err := os.WriteFile(targetDir, newKustomization, stat.Mode().Perm()); err != nil {
 		return fmt.Errorf("failed to write file. error: %v", err)
 	}
 
-	if err := git.Branch(ctx, repo, fmt.Sprintf("test_%d", time.Now().Unix())); err != nil {
-		return fmt.Errorf("faield to switch branch. error: %v", err)
-	}
-
-	if _, err := git.Commit(ctx, repo, targetDir, "fix: kustomization new tag"); err != nil {
+	if _, err := github.Commit(ctx, repo, targetDir, fmt.Sprintf("[%s][image-committer][%s] イメージの更新 ", regitryConfig.Env[event.Account], event.Detail.RepositoryName)); err != nil {
 		return fmt.Errorf("failed to commit. error: %v", err)
 	}
-	return git.Push(ctx, repo)
+
+	if err := github.Push(context.Background(), repo); err != nil {
+		// 既にPRがある場合は無視 実装がきったないのは許容　wrapされてて比較できなかった
+		if strings.Contains(err.Error(), git.ErrNonFastForwardUpdate.Error()) {
+			log.Warn(ctx, "failed to push. error: %v", err)
+			return ErrDuplicatePR
+		}
+		log.Error(ctx, "failed to push. error: %v", err)
+		return fmt.Errorf("failed to push. error: %v", err)
+	}
+	return nil
 }
 
 func findImage(images []types.Image, imageURI string) *types.Image {

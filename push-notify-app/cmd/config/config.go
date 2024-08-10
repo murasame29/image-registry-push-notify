@@ -13,6 +13,10 @@ func LoadEnv() error {
 		return err
 	}
 
+	if err := env.Parse(&config.AWS); err != nil {
+		return err
+	}
+
 	Config = config
 
 	return nil

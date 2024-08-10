@@ -2,13 +2,12 @@ package updater
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strings"
 
 	"github.com/murasame29/image-registry-push-notify/sample-app/internal/model"
-	"gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v2"
 )
 
 type AppConfig struct {
@@ -39,7 +38,7 @@ type RegistryConfig struct {
 	RegitryURI string `yaml:"registryURI"`
 	// e.g.github.com/murasame29/image-registry-push-notify/services/sample/sample-app/app/dev/overlays
 	// e.g.github.com/murasame29/image-registry-push-notify/services/$1/$2/$3/$env/overlays
-	GitHubRepository string `yaml:"gitHubRepository"`
+	GitHubRepository string `yaml:"githubRepository"`
 	// e.g. ap-northeast-1
 	Region string `yaml:"region"`
 	// e.g. 123456789012: dev
@@ -57,21 +56,16 @@ func (c *RegistryConfig) buildRepositoryName(event *model.ECRPushEvent) (string,
 	variableMap := make(map[string]string)
 
 	// $1 ,$2 ..に対応対応するピースを探す
-	registryName := trimSpace(strings.Split(c.RegitryURI, "/"))
-	splitedRegistryName := trimSpace(strings.Split(event.Detail.RepositoryName, "/"))
-	log.Println(registryName, splitedRegistryName, len(registryName), len(splitedRegistryName))
+	registryName := removeEmpty(strings.Split(c.RegitryURI, "/"))
+	splitedRegistryName := removeEmpty(strings.Split(event.Detail.RepositoryName, "/"))
 	for i := range registryName {
 		if strings.Contains(registryName[i], "*") {
 			continue
 		}
-		log.Println(registryName[i])
 		if strings.Contains(registryName[i], "$") {
-			log.Println(registryName[i], splitedRegistryName[i])
 			variableMap[registryName[i]] = splitedRegistryName[i]
 		}
 	}
-
-	log.Println(variableMap)
 
 	repositoryName := c.GitHubRepository
 	splitedRepository := strings.Split(c.GitHubRepository, "/")
@@ -81,14 +75,10 @@ func (c *RegistryConfig) buildRepositoryName(event *model.ECRPushEvent) (string,
 				repositoryName = strings.ReplaceAll(repositoryName, "$env", environment)
 				continue
 			}
-			value, ok := variableMap[splitedRepository[i]]
-			if !ok {
-				log.Println("variable not found", splitedRepository[i])
-				continue
+
+			for variable, value := range variableMap {
+				repositoryName = strings.ReplaceAll(repositoryName, variable, value)
 			}
-
-			repositoryName = strings.ReplaceAll(repositoryName, splitedRepository[i], value)
-
 		}
 	}
 
@@ -146,6 +136,7 @@ func NewConfigWithFile(path string) ([]RegistryConfig, error) {
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
+
 	return config, nil
 }
 
@@ -162,36 +153,29 @@ func filterRegistryConfigs(event *model.ECRPushEvent, registryConfig []RegistryC
 	eventRepositoryPath := strings.Split(event.Detail.RepositoryName, "/")
 
 	for _, config := range registryConfig {
-		log.Println(config)
 		if config.Region != event.Region {
-			log.Println("region not match")
 			continue
 		}
 		if _, ok := config.Env[event.Account]; !ok {
-			log.Println("account not match")
 			continue
 		}
 		repositoryPath := strings.Split(config.RegitryURI, "/")
 		if filterRegistryConfig(repositoryPath, eventRepositoryPath) {
 			return &config, true
 		}
-		log.Println("filter not match")
 	}
 	return nil, false
 }
 
 func filterRegistryConfig(repositoryPath, eventRepositoryPath []string) bool {
-	repositoryPath = trimSpace(repositoryPath)
-	eventRepositoryPath = trimSpace(eventRepositoryPath)
-
+	repositoryPath = removeEmpty(repositoryPath)
+	eventRepositoryPath = removeEmpty(eventRepositoryPath)
 	for i := range len(repositoryPath) {
 		if repositoryPath[i] == "*" || strings.Contains(repositoryPath[i], "$") {
-			log.Println("wildcard", repositoryPath[i])
 			continue
 		}
 
 		if repositoryPath[i] != eventRepositoryPath[i] {
-			log.Println("not match", repositoryPath[i], eventRepositoryPath[i])
 			return false
 		}
 	}
@@ -199,13 +183,14 @@ func filterRegistryConfig(repositoryPath, eventRepositoryPath []string) bool {
 	return true
 }
 
-func trimSpace(in []string) []string {
-	var r []string
+func removeEmpty(in []string) []string {
+	var result []string
 	for i := range in {
 		if len(strings.TrimSpace(in[i])) == 0 {
 			continue
 		}
-		r = append(r, in[i])
+		result = append(result, in[i])
 	}
-	return r
+
+	return result
 }

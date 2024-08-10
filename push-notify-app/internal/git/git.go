@@ -15,6 +15,10 @@ import (
 	"github.com/murasame29/image-registry-push-notify/sample-app/internal/log"
 )
 
+var (
+	ErrNonFastForwardUpdate = git.ErrNonFastForwardUpdate
+)
+
 type GitHub struct {
 	// token is private access token
 	token    string
@@ -93,7 +97,7 @@ func fetchOrigin(ctx context.Context, repo *git.Repository, refSpecStr string) e
 
 func (g *GitHub) Clone(ctx context.Context, repository string) (*git.Repository, string, error) {
 	repoName := strings.Split(repository, "/")[4]
-	dir := fmt.Sprintf("./tmp/%s_%d", repoName, time.Now().Unix())
+	dir := fmt.Sprintf("/tmp/%s_%d", repoName, time.Now().Unix())
 	repo, err := git.PlainClone(dir, false, &git.CloneOptions{
 		URL: repository,
 		Auth: &http.BasicAuth{
@@ -117,13 +121,13 @@ func (g *GitHub) Commit(ctx context.Context, repo *git.Repository, path string, 
 	}
 
 	log.Info(ctx, "trying git add. path: %s", path)
-	hash, err := workspace.Add(".")
-	if err != nil {
+
+	if _, err := workspace.Add("."); err != nil {
 		log.Error(ctx, "failed to git add. path: %s error: %v", path, err)
 		return "", err
 	}
 
-	log.Info(ctx, "git add successfuly path:%s hash: %s", path, hash.String())
+	log.Info(ctx, "git add successfuly path:%s", path)
 	status, err := workspace.Status()
 	if err != nil {
 		log.Error(ctx, "failed to git status. error: %v", err)
@@ -132,7 +136,7 @@ func (g *GitHub) Commit(ctx context.Context, repo *git.Repository, path string, 
 
 	log.Info(ctx, status.String())
 
-	log.Info(ctx, "trying git commit -m %s. hash: %s", message, hash.String())
+	log.Info(ctx, "trying git commit -m %s.", message)
 	commit, err := workspace.Commit(message, &git.CommitOptions{
 		Author: &object.Signature{
 			Name:  g.autherName,
@@ -145,19 +149,35 @@ func (g *GitHub) Commit(ctx context.Context, repo *git.Repository, path string, 
 		log.Error(ctx, "failed to git commit. error: %v", err)
 	}
 
-	log.Info(ctx, "git commit successfuly hash: %s", commit.String())
+	log.Info(ctx, "git commit successfuly")
 	return commit.String(), nil
 }
 
 func (g *GitHub) Push(ctx context.Context, repo *git.Repository) error {
-	log.Info(ctx, "trying reposiotry push to origin")
-	if err := repo.PushContext(ctx, &git.PushOptions{
+	log.Info(ctx, "trying reposiotry push to origin...")
+	o := &git.PushOptions{
 		Auth: &http.BasicAuth{
 			Username: g.username,
 			Password: g.token,
 		},
-	}); err != nil {
-		log.Error(ctx, "failed to psuh repository. error: %v", err)
+	}
+	log.Info(ctx, "push options: %v", o)
+	if err := o.Validate(); err != nil {
+		log.Error(ctx, "failed to validate push options. error: %v", err)
+		return err
+	}
+	log.Info(ctx, "push options validate successfuly")
+	log.Info(ctx, "trying open remote")
+	remote, err := repo.Remote(o.RemoteName)
+	if err != nil {
+		log.Error(ctx, "failed to open remote. error: %v", err)
+		return err
+	}
+
+	log.Info(ctx, "remote open successfuly")
+	log.Info(ctx, "trying push")
+
+	if err := remote.PushContext(ctx, o); err != nil {
 		return err
 	}
 

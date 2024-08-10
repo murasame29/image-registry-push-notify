@@ -6,7 +6,7 @@ metadata:
   name: tester
 spec:
   containers:
-  - image: busybox:1.36
+  - image: 211125717884.dkr.ecr.ap-northeast-1.amazonaws.com/example/sample/sample-app/app:1
     name: tester
     command: ["sleep", "360000"]
     securityContext:
